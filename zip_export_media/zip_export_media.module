@@ -1,0 +1,148 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function zip_export_media_menu() {
+  $items = array();
+    $items['node/%/zip-export'] = array(
+      'title' => 'Zip export',
+      'description' => 'Lets you export files attached to nodes as a Zip package.',
+      'page callback' => 'zip_export_media_from_node',
+      'page arguments' => array(1),
+      'access arguments' => array('export media in zip format'),
+      'type' => MENU_CALLBACK,
+    );
+  return $items;
+}
+
+
+/**
+ * Implements hook_permission().
+ */
+function zip_export_media_permission() {
+  return array(
+    'export media in zip format' => array(
+      'title' => t('Export media in Zip format'),
+      'description' => t('Allow users to export media from Digital Heritage nodes in Zip format.'),
+    ),
+  );
+}
+
+
+/**
+ * Gets the files from a given node's field_media field and calls 
+ * zip_export_media_create_zip to make and present a Zip file of them.
+ *
+ * @param $nid
+ *   The ID of the node whose media we want to export as a Zip file.
+ * @return
+ *   TRUE if the export is successful and FALSE if it is unsuccessful.
+ */
+function zip_export_media_from_node($nid) {
+  // No funny business.
+  if (is_numeric($nid)) {
+    $node = node_load($nid);
+
+    // Loop through the node's media fields and load the files into an array.
+    $files = array();
+    foreach ($node->field_media['und'] as $media) {
+      $fid = $media['fid'];
+      $files[] = file_load($media['fid']);
+    }
+    
+    // If no media files were found...
+    if(empty($files)) {
+      drupal_set_message('The requested node contains no media items.', 'error');
+      return FALSE;
+    }
+    // Otherwise, proceed.
+    else {
+      // If PHP Zip (http://www.php.net/manual/en/book.zip.php) is installed, which it should be in PHP 5.2+, create a Zip file.
+      if (function_exists('zip_open')) {
+        return zip_export_media_create_zip($files, $nid);
+      }
+      // Otherwise, explain the error.
+      else {
+        drupal_set_message('In order to export a Zip file, you must download and enable PHP Zip: http://www.php.net/manual/en/book.zip.php', 'error');
+        return FALSE;
+      }
+    }
+  }
+  else {
+    drupal_access_denied();
+    return FALSE;  // We actually don't reach this point, of course.
+  }
+}
+
+
+/**
+ * Creates a compressed zip file. Hat tip to http://davidwalsh.name/create-zip-php 
+ * and http://www.drupal.org/project/imagefield_archive.
+ *
+ * @param $files
+ *   An array of files, associated with $nid, to be exported as a Zip file.
+ * @param $nid
+ *   The ID of the node whose media we want to export as a Zip file.
+ * @return
+ *   TRUE if the export is successful and FALSE if it is unsuccessful.
+ */
+function zip_export_media_create_zip($files = array(), $nid) {
+  // @TODO: Incorporate @param $overwrite = false
+  
+  // To be on the safe side...
+	if(count($files)) {
+    $zipfile = tempnam(file_directory_temp(), 'zip');
+    // Create the Zip archive.
+    $zip = new ZipArchive();
+    if (!$zip->open($zipfile, ZIPARCHIVE::CREATE | ZIPARCHIVE::OVERWRITE)) {
+      drupal_set_message('Cannot create Zip archive.', 'error');
+      return FALSE;
+    }
+    
+    // Add a directory named after the node.
+    $zip->addEmptyDir($nid);
+    $dir = $nid . '/';
+    
+    // @TODO: Check first whether the directory already exists (i.e., whether this node's media fields have already been exported).
+    
+		// Add the files to the Zip archive.
+		foreach($files as $file) {
+      $filename = $file->filename;
+      $uri = $file->uri;
+      $path = drupal_realpath($uri);
+
+      // Uncomment the next line for debugging.
+      //dsm('The path is ' . $path . ' and the filename is ' . $filename . '.');
+
+      // Add the file inside the NID directory.
+      $zip->addFile($path, $dir . $filename);
+		}
+		
+		// Uncomment the next lines for debugging.
+		//$debug_message = 'The zip archive contains ' . $zip->numFiles . ' files with a status of ' . $zip->status;
+		//dsm($debug_message);
+		
+		// Done! Close the Zip archive.
+		$zip->close();
+		
+		// Name the Zip archive with 'MukurtuArchive,' the node ID, and a timestamp.
+    $zipname = 'MukurtuArchive' . '-node' . $nid . '-' . date(Y) . '-' . date(m) . '-' . date(d) . '-' . date(H) . date(i) . '.zip';
+
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="'. $zipname . '"');
+    header('Content-Transfer-Encoding: binary');
+    header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+    header('Pragma: public');
+    header('Expires: 0');
+    header('Content-Length: '. filesize($zipfile));
+    readfile($zipfile);
+    unlink($zipfile);
+    return TRUE;
+	}
+	else
+	{
+	  drupal_set_message('You have no valid files.', 'error');
+		return FALSE;
+	}
+}
