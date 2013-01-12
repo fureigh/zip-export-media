@@ -24,7 +24,7 @@ function zip_export_media_permission() {
   return array(
     'export media in zip format' => array(
       'title' => t('Export media in Zip format'),
-      'description' => t('Allow users to export media from Digital Heritage nodes in Zip format.'),
+      'description' => t('Allow users to export media from nodes in Zip format.'),
     ),
   );
 }
@@ -91,7 +91,7 @@ function zip_export_media_create_zip($files = array(), $nid) {
   // @TODO: Incorporate @param $overwrite = false
   
   // To be on the safe side...
-	if(count($files)) {
+  if(count($files)) {
     $zipfile = tempnam(file_directory_temp(), 'zip');
     // Create the Zip archive.
     $zip = new ZipArchive();
@@ -106,27 +106,26 @@ function zip_export_media_create_zip($files = array(), $nid) {
     
     // @TODO: Check first whether the directory already exists (i.e., whether this node's media fields have already been exported).
     
-		// Add the files to the Zip archive.
-		foreach($files as $file) {
+    // Add the files to the Zip archive.
+    foreach($files as $file) {
       $filename = $file->filename;
-      $uri = $file->uri;
-      $path = drupal_realpath($uri);
+      $path = drupal_realpath($file->uri);
 
       // Uncomment the next line for debugging.
       //dsm('The path is ' . $path . ' and the filename is ' . $filename . '.');
 
       // Add the file inside the NID directory.
       $zip->addFile($path, $dir . $filename);
-		}
+    }
 		
-		// Uncomment the next lines for debugging.
-		//$debug_message = 'The zip archive contains ' . $zip->numFiles . ' files with a status of ' . $zip->status;
-		//dsm($debug_message);
+    // Uncomment the next lines for debugging.
+    //$debug_message = 'The zip archive contains ' . $zip->numFiles . ' files with a status of ' . $zip->status;
+    //dsm($debug_message);
+    
+    // Done! Close the Zip archive.
+    $zip->close();
 		
-		// Done! Close the Zip archive.
-		$zip->close();
-		
-		// Name the Zip archive with 'MukurtuArchive,' the node ID, and a timestamp.
+    // Name the Zip archive with 'MukurtuArchive,' the node ID, and a timestamp.
     $zipname = 'MukurtuArchive' . '-node' . $nid . '-' . date(Y) . '-' . date(m) . '-' . date(d) . '-' . date(H) . date(i) . '.zip';
 
     header('Content-Type: application/zip');
@@ -139,10 +138,10 @@ function zip_export_media_create_zip($files = array(), $nid) {
     readfile($zipfile);
     unlink($zipfile);
     return TRUE;
-	}
-	else
-	{
-	  drupal_set_message('You have no valid files.', 'error');
-		return FALSE;
-	}
+  }
+  else
+  {
+    drupal_set_message('You have no valid files.', 'error');
+    return FALSE;
+  }
 }
